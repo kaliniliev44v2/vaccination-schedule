@@ -17,7 +17,11 @@ async def create_patient(
     db: AsyncSession = Depends(get_db),
     current_doctor: Doctor = Depends(get_current_doctor)
 ):
-    new_patient = Patient(**patient.dict(), doctor_id=current_doctor.id)
+    new_patient = Patient(
+    **patient.dict(exclude={"doctor_id"}),
+    doctor_id=current_doctor.id
+)
+
     db.add(new_patient)
     await db.commit()
     await db.refresh(new_patient)
