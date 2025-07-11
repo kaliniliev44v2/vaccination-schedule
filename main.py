@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from routers import patient, doctor, vaccine, immunization
+from routers import patient, immunization, auth
 
 app = FastAPI(
     title="Vaccination Schedule API",
@@ -8,9 +8,10 @@ app = FastAPI(
 
 # Включване на routers
 app.include_router(patient.router)
-app.include_router(doctor.router)
-app.include_router(vaccine.router)
+# app.include_router(doctor.router)
+# app.include_router(vaccine.router)
 app.include_router(immunization.router)
+app.include_router(auth.router)
 
 @app.get("/")
 def root():

@@ -54,7 +54,6 @@ class ImmunizationCreate(BaseModel):
     patient_id: int
     vaccine_id: int
     date_given: date
-    doctor_id: int
 
 class ImmunizationOut(BaseModel):
     id: int
@@ -64,3 +63,7 @@ class ImmunizationOut(BaseModel):
     doctor_id: int
     class Config:
         orm_mode = True
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
