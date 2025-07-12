@@ -1,29 +1,43 @@
 from fastapi import FastAPI
-from routers import patient, immunization, auth, vaccine , doctor, schedule
-from fastapi.templating import Jinja2Templates
-from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi import Request
+from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
 import os
-from routers.auth import router as web_auth_router 
 
-templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "templates"))
-
+# Импортиране на всички роутери
+from routers import patient, immunization, auth, vaccine, doctor, schedule
+import crud
 
 app = FastAPI(
     title="Vaccination Schedule API",
-    version="1.0.0"
+    version="1.0.0",
+    description="API за управление на ваксинационни графици"
 )
 
-# Включване на routers
-app.include_router(patient.router)
+# Включване на API роутери
+app.include_router(auth.router)
+app.include_router(patient.router) 
 app.include_router(doctor.router)
 app.include_router(vaccine.router)
 app.include_router(immunization.router)
-app.include_router(auth.router)
 app.include_router(schedule.router)
-app.include_router(web_auth_router)
 
+# Включване на Web CRUD роутери
+app.include_router(crud.router)
+
+# Статични файлове (ако имате CSS, JS, изображения)
+if os.path.exists("static"):
+    app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @app.get("/", include_in_schema=False)
 def redirect_to_login():
+    """Пренасочване към login страницата"""
     return RedirectResponse(url="/auth/login")
+
+@app.get("/health")
+def health_check():
+    """Health check endpoint"""
+    return {"status": "healthy"}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)

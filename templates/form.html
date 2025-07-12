@@ -1,37 +1,86 @@
-{# templates/patient_form.html #}
 {% extends "base.html" %}
 
 {% block title %}{{ patient and 'Редакция' or 'Нов пациент' }}{% endblock %}
 
 {% block content %}
-<div class="container mt-5">
-  <h2 class="text-center text-primary mb-4">{{ patient and 'Редакция на пациент' or 'Добавяне на нов пациент' }}</h2>
+<div class="container">
+  <div class="row justify-content-center">
+    <div class="col-md-8 col-lg-6">
+      <div class="card shadow">
+        <div class="card-header bg-primary text-white">
+          <h4 class="mb-0">
+            <i class="bi bi-{{ patient and 'pencil' or 'person-plus' }}"></i>
+            {{ patient and 'Редакция на пациент' or 'Добавяне на нов пациент' }}
+          </h4>
+        </div>
+        
+        <div class="card-body">
+          {% if error %}
+            <div class="alert alert-danger" role="alert">
+              <i class="bi bi-exclamation-triangle"></i> {{ error }}
+            </div>
+          {% endif %}
 
-  <form method="post" action="{{ action_url }}" class="bg-white shadow rounded p-4 mx-auto" style="max-width: 600px;">
-    <div class="mb-3">
-      <label for="first_name" class="form-label">Име</label>
-      <input type="text" class="form-control" name="first_name" id="first_name" required value="{{ patient.first_name if patient else '' }}">
-    </div>
+          <form method="post" action="{{ action_url }}">
+            <div class="mb-3">
+              <label for="first_name" class="form-label">
+                <i class="bi bi-person"></i> Име <span class="text-danger">*</span>
+              </label>
+              <input type="text" class="form-control" name="first_name" id="first_name" 
+                     required value="{{ patient.first_name if patient else '' }}" 
+                     placeholder="Въведете име">
+            </div>
 
-    <div class="mb-3">
-      <label for="last_name" class="form-label">Фамилия</label>
-      <input type="text" class="form-control" name="last_name" id="last_name" required value="{{ patient.last_name if patient else '' }}">
-    </div>
+            <div class="mb-3">
+              <label for="last_name" class="form-label">
+                <i class="bi bi-person"></i> Фамилия <span class="text-danger">*</span>
+              </label>
+              <input type="text" class="form-control" name="last_name" id="last_name" 
+                     required value="{{ patient.last_name if patient else '' }}"
+                     placeholder="Въведете фамилия">
+            </div>
 
-    <div class="mb-3">
-      <label for="egn" class="form-label">ЕГН</label>
-      <input type="text" class="form-control" name="egn" id="egn" required value="{{ patient.egn if patient else '' }}">
-    </div>
+            <div class="mb-3">
+              <label for="egn" class="form-label">
+                <i class="bi bi-card-text"></i> ЕГН <span class="text-danger">*</span>
+              </label>
+              <input type="text" class="form-control" name="egn" id="egn" 
+                     required value="{{ patient.egn if patient else '' }}"
+                     placeholder="0000000000" maxlength="10" pattern="[0-9]{10}">
+              <div class="form-text">10-цифрено единно гражданско число</div>
+            </div>
 
-    <div class="mb-3">
-      <label for="birth_date" class="form-label">Дата на раждане</label>
-      <input type="date" class="form-control" name="birth_date" id="birth_date" required value="{{ patient.birth_date if patient else '' }}">
-    </div>
+            <div class="mb-4">
+              <label for="birth_date" class="form-label">
+                <i class="bi bi-calendar"></i> Дата на раждане <span class="text-danger">*</span>
+              </label>
+              <input type="date" class="form-control" name="birth_date" id="birth_date" 
+                     required value="{{ patient.birth_date if patient else '' }}">
+            </div>
 
-    <div class="d-flex justify-content-between">
-      <button type="submit" class="btn btn-success">Запази</button>
-      <a href="/dashboard" class="btn btn-secondary">Отказ</a>
+            <div class="d-flex gap-2">
+              <button type="submit" class="btn btn-success flex-fill">
+                <i class="bi bi-check-lg"></i> 
+                {{ patient and 'Запази промените' or 'Създай пациент' }}
+              </button>
+              <a href="/dashboard" class="btn btn-secondary">
+                <i class="bi bi-x-lg"></i> Отказ
+              </a>
+            </div>
+          </form>
+        </div>
+      </div>
     </div>
-  </form>
+  </div>
 </div>
+
+<script>
+  // Валидация на ЕГН
+  document.getElementById('egn').addEventListener('input', function(e) {
+    e.target.value = e.target.value.replace(/[^0-9]/g, '');
+    if (e.target.value.length > 10) {
+      e.target.value = e.target.value.slice(0, 10);
+    }
+  });
+</script>
 {% endblock %}

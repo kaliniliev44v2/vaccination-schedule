@@ -1,44 +1,117 @@
-{# templates/patient_vaccines.html #}
 {% extends "base.html" %}
 
 {% block title %}Ваксини на {{ patient.first_name }}{% endblock %}
 
 {% block content %}
-<div class="container mt-5">
-  <h2 class="mb-4 text-primary">Ваксинации на {{ patient.first_name }} {{ patient.last_name }}</h2>
+<div class="container">
+  <div class="row">
+    <div class="col-12">
+      <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="text-primary">
+          <i class="bi bi-shield-check"></i> Ваксинации на {{ patient.first_name }} {{ patient.last_name }}
+        </h2>
+        <a href="/patients/{{ patient.id }}/vaccines/add" class="btn btn-success">
+          <i class="bi bi-plus-circle"></i> Добави ваксина
+        </a>
+      </div>
+    </div>
+  </div>
 
-  <p><strong>ЕГН:</strong> {{ patient.egn }}</p>
-  <p><strong>Дата на раждане:</strong> {{ patient.birth_date }}</p>
+  <div class="row mb-4">
+    <div class="col-md-6">
+      <div class="card">
+        <div class="card-body">
+          <h6 class="card-subtitle mb-2 text-muted">Информация за пациента</h6>
+          <p class="card-text">
+            <strong><i class="bi bi-card-text"></i> ЕГН:</strong> {{ patient.egn }}<br>
+            <strong><i class="bi bi-calendar"></i> Дата на раждане:</strong> {{ patient.birth_date.strftime('%d.%m.%Y') }}<br>
+            <strong><i class="bi bi-clock"></i> Възраст:</strong> {{ age_months }} месеца
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
 
-  <hr>
-  <h4>Поставени ваксини</h4>
-  {% if given %}
-    <ul class="list-group mb-3">
-      {% for v in given %}
-        <li class="list-group-item d-flex justify-content-between align-items-center">
-          {{ v.name }}
-          <span class="badge bg-success">Поставена</span>
-        </li>
-      {% endfor %}
-    </ul>
-  {% else %}
-    <div class="alert alert-warning">Няма поставени ваксини.</div>
-  {% endif %}
+  <div class="row">
+    <div class="col-md-6">
+      <div class="card border-success">
+        <div class="card-header bg-success text-white">
+          <h5 class="mb-0">
+            <i class="bi bi-check-circle"></i> Поставени ваксини
+            <span class="badge bg-light text-success">{{ given|length }}</span>
+          </h5>
+        </div>
+        <div class="card-body">
+          {% if given %}
+            <div class="list-group list-group-flush">
+              {% for vaccine in given %}
+                <div class="list-group-item d-flex justify-content-between align-items-center">
+                  <div>
+                    <i class="bi bi-shield-fill-check text-success"></i>
+                    <strong>{{ vaccine.name }}</strong>
+                    {% if vaccine.is_mandatory %}
+                      <small class="badge bg-warning text-dark ms-2">Задължителна</small>
+                    {% endif %}
+                  </div>
+                  <span class="badge bg-success rounded-pill">✓</span>
+                </div>
+              {% endfor %}
+            </div>
+          {% else %}
+            <div class="text-center text-muted py-4">
+              <i class="bi bi-shield-x" style="font-size: 2rem;"></i>
+              <p class="mt-2">Няма поставени ваксини</p>
+            </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
 
-  <h4>Липсващи задължителни ваксини</h4>
-  {% if missing %}
-    <ul class="list-group">
-      {% for m in missing %}
-        <li class="list-group-item d-flex justify-content-between align-items-center">
-          {{ m }}
-          <span class="badge bg-danger">Липсва</span>
-        </li>
-      {% endfor %}
-    </ul>
-  {% else %}
-    <div class="alert alert-success">Няма липсващи ваксини 🎉</div>
-  {% endif %}
+    <div class="col-md-6">
+      <div class="card border-warning">
+        <div class="card-header bg-warning text-dark">
+          <h5 class="mb-0">
+            <i class="bi bi-exclamation-triangle"></i> Липсващи задължителни ваксини
+            <span class="badge bg-light text-warning">{{ missing|length }}</span>
+          </h5>
+        </div>
+        <div class="card-body">
+          {% if missing %}
+            <div class="list-group list-group-flush">
+              {% for vaccine in missing %}
+                <div class="list-group-item d-flex justify-content-between align-items-center">
+                  <div>
+                    <i class="bi bi-shield-exclamation text-warning"></i>
+                    <strong>{{ vaccine.name }}</strong>
+                    {% if vaccine.recommended_month %}
+                      <small class="text-muted">(препоръчва се в {{ vaccine.recommended_month }} месец)</small>
+                    {% endif %}
+                  </div>
+                  <span class="badge bg-warning rounded-pill">!</span>
+                </div>
+              {% endfor %}
+            </div>
+            
+            <div class="alert alert-warning mt-3">
+              <i class="bi bi-info-circle"></i>
+              <small>Има <strong>{{ missing|length }}</strong> липсващи задължителни ваксини за тази възраст.</small>
+            </div>
+          {% else %}
+            <div class="text-center text-success py-4">
+              <i class="bi bi-check-circle" style="font-size: 2rem;"></i>
+              <p class="mt-2 mb-0">Няма липсващи ваксини! 🎉</p>
+              <small class="text-muted">Всички задължителни ваксини са поставени.</small>
+            </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
 
-  <a href="/dashboard" class="btn btn-secondary mt-4">⬅ Назад</a>
+  <div class="mt-4 text-center">
+    <a href="/dashboard" class="btn btn-secondary">
+      <i class="bi bi-arrow-left"></i> Назад към пациентите
+    </a>
+  </div>
 </div>
 {% endblock %}

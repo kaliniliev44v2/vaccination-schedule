@@ -1,22 +1,41 @@
-{# templates/login.html #}
 {% extends "base.html" %}
 {% block title %}Вход{% endblock %}
 {% block content %}
 <div class="container mt-5" style="max-width: 400px;">
-  <h2 class="text-center text-primary mb-4">Вход за лекари</h2>
-  <form method="post" action="/auth/token">
-    <div class="mb-3">
-      <label class="form-label">Потребителско име</label>
-      <input type="text" name="username" class="form-control" required>
+  <div class="text-center mb-4">
+    <h2 class="text-primary">🏥 Ваксинационен график</h2>
+    <p class="text-muted">Вход за лекари</p>
+  </div>
+  
+  {% if error %}
+    <div class="alert alert-danger" role="alert">
+      {{ error }}
     </div>
-    <div class="mb-3">
-      <label class="form-label">Парола</label>
-      <input type="password" name="password" class="form-control" required>
+  {% endif %}
+  
+  <div class="card shadow">
+    <div class="card-body">
+      <form method="post" action="/auth/login">
+        <div class="mb-3">
+          <label for="username" class="form-label">Потребителско име</label>
+          <input type="text" name="username" id="username" class="form-control" required autofocus>
+        </div>
+        <div class="mb-3">
+          <label for="password" class="form-label">Парола</label>
+          <input type="password" name="password" id="password" class="form-control" required>
+        </div>
+        <button type="submit" class="btn btn-primary w-100">
+          <i class="bi bi-box-arrow-in-right"></i> Вход
+        </button>
+      </form>
     </div>
-    <button type="submit" class="btn btn-primary w-100">Вход</button>
-  </form>
+  </div>
+  
   <div class="text-center mt-3">
-    <a href="/auth/register">Нямате акаунт? Регистрация</a>
+    <p class="text-muted">Нямате акаунт?</p>
+    <a href="/auth/register" class="btn btn-outline-success">
+      <i class="bi bi-person-plus"></i> Регистрация
+    </a>
   </div>
 </div>
 {% endblock %}

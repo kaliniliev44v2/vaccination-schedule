@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block title %}Добави ваксина за {{ patient.first_name }}{% endblock %}
+
+{% block content %}
+<div class="container">
+  <div class="row justify-content-center">
+    <div class="col-md-8 col-lg-6">
+      <div class="card shadow">
+        <div class="card-header bg-success text-white">
+          <h4 class="mb-0">
+            <i class="bi bi-plus-circle"></i>
+            Добави ваксина за {{ patient.first_name }} {{ patient.last_name }}
+          </h4>
+        </div>
+        
+        <div class="card-body">
+          {% if error %}
+            <div class="alert alert-danger" role="alert">
+              <i class="bi bi-exclamation-triangle"></i> {{ error }}
+            </div>
+          {% endif %}
+
+          {% if vaccines %}
+            <form method="post" action="/patients/{{ patient.id }}/vaccines/add">
+              <div class="mb-3">
+                <label for="vaccine_id" class="form-label">
+                  <i class="bi bi-shield"></i> Изберете ваксина <span class="text-danger">*</span>
+                </label>
+                <select class="form-select" name="vaccine_id" id="vaccine_id" required>
+                  <option value="">-- Изберете ваксина --</option>
+                  {% for vaccine in vaccines %}
+                    <option value="{{ vaccine.id }}">
+                      {{ vaccine.name }}
+                      {% if vaccine.is_mandatory %}(Задължителна){% endif %}
+                      {% if vaccine.recommended_month %}
+                        - препоръчва се в {{ vaccine.recommended_month }} месец
+                      {% endif %}
+                    </option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <div class="mb-4">
+                <label for="date_given" class="form-label">
+                  <i class="bi bi-calendar"></i> Дата на поставяне <span class="text-danger">*</span>
+                </label>
+                <input type="date" class="form-control" name="date_given" id="date_given" 
+                       required max="{{ today }}">
+                <div class="form-text">Датата не може да бъде в бъдещето</div>
+              </div>
+
+              <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-success flex-fill">
+                  <i class="bi bi-check-lg"></i> Добави ваксината
+                </button>
+                <a href="/patients/{{ patient.id }}/vaccines" class="btn btn-secondary">
+                  <i class="bi bi-x-lg"></i> Отказ
+                </a>
+              </div>
+            </form>
+          {% else %}
+            <div class="text-center py-4">
+              <i class="bi bi-check-circle text-success" style="font-size: 3rem;"></i>
+              <h5 class="mt-3 text-success">Всички ваксини са поставени!</h5>
+              <p class="text-muted">Няма налични ваксини за добавяне към този пациент.</p>
+              <a href="/patients/{{ patient.id }}/vaccines" class="btn btn-primary">
+                <i class="bi bi-arrow-left"></i> Назад към ваксините
+              </a>
+            </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Задаване на днешната дата като максимална
+  document.getElementById('date_given').max = new Date().toISOString().split('T')[0];
+  
+  // Задаване на днешната дата като стойност по подразбиране
+  document.getElementById('date_given').value = new Date().toISOString().split('T')[0];
+</script>
+{% endblock %}
