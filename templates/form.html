@@ -1,0 +1,37 @@
+{# templates/patient_form.html #}
+{% extends "base.html" %}
+
+{% block title %}{{ patient and 'Редакция' or 'Нов пациент' }}{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+  <h2 class="text-center text-primary mb-4">{{ patient and 'Редакция на пациент' or 'Добавяне на нов пациент' }}</h2>
+
+  <form method="post" action="{{ action_url }}" class="bg-white shadow rounded p-4 mx-auto" style="max-width: 600px;">
+    <div class="mb-3">
+      <label for="first_name" class="form-label">Име</label>
+      <input type="text" class="form-control" name="first_name" id="first_name" required value="{{ patient.first_name if patient else '' }}">
+    </div>
+
+    <div class="mb-3">
+      <label for="last_name" class="form-label">Фамилия</label>
+      <input type="text" class="form-control" name="last_name" id="last_name" required value="{{ patient.last_name if patient else '' }}">
+    </div>
+
+    <div class="mb-3">
+      <label for="egn" class="form-label">ЕГН</label>
+      <input type="text" class="form-control" name="egn" id="egn" required value="{{ patient.egn if patient else '' }}">
+    </div>
+
+    <div class="mb-3">
+      <label for="birth_date" class="form-label">Дата на раждане</label>
+      <input type="date" class="form-control" name="birth_date" id="birth_date" required value="{{ patient.birth_date if patient else '' }}">
+    </div>
+
+    <div class="d-flex justify-content-between">
+      <button type="submit" class="btn btn-success">Запази</button>
+      <a href="/dashboard" class="btn btn-secondary">Отказ</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

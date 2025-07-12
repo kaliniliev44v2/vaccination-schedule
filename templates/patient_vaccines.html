@@ -1,0 +1,44 @@
+{# templates/patient_vaccines.html #}
+{% extends "base.html" %}
+
+{% block title %}Ваксини на {{ patient.first_name }}{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+  <h2 class="mb-4 text-primary">Ваксинации на {{ patient.first_name }} {{ patient.last_name }}</h2>
+
+  <p><strong>ЕГН:</strong> {{ patient.egn }}</p>
+  <p><strong>Дата на раждане:</strong> {{ patient.birth_date }}</p>
+
+  <hr>
+  <h4>Поставени ваксини</h4>
+  {% if given %}
+    <ul class="list-group mb-3">
+      {% for v in given %}
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+          {{ v.name }}
+          <span class="badge bg-success">Поставена</span>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <div class="alert alert-warning">Няма поставени ваксини.</div>
+  {% endif %}
+
+  <h4>Липсващи задължителни ваксини</h4>
+  {% if missing %}
+    <ul class="list-group">
+      {% for m in missing %}
+        <li class="list-group-item d-flex justify-content-between align-items-center">
+          {{ m }}
+          <span class="badge bg-danger">Липсва</span>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <div class="alert alert-success">Няма липсващи ваксини 🎉</div>
+  {% endif %}
+
+  <a href="/dashboard" class="btn btn-secondary mt-4">⬅ Назад</a>
+</div>
+{% endblock %}

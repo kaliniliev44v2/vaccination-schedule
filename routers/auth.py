@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Form, HTTPException, Request, status 
+from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from jose import JWTError, jwt
@@ -86,3 +88,33 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSessi
 
     access_token = create_access_token(data={"sub": str(doctor.id)})
     return {"access_token": access_token, "token_type": "bearer"}
+
+
+templates = Jinja2Templates(directory="templates")
+router = APIRouter()
+
+@router.get("/auth/login", response_class=HTMLResponse)
+async def login_form(request: Request):
+    return templates.TemplateResponse("login.html", {"request": request})
+
+
+@router.get("/auth/register", response_class=HTMLResponse)
+async def register_form(request: Request):
+    return templates.TemplateResponse("register.html", {"request": request})
+
+
+@router.post("/auth/register")
+async def register_user(
+    request: Request,
+    username: str = Form(...),
+    password: str = Form(...),
+    db: AsyncSession = Depends(get_db)
+):
+    hashed_pw = get_password_hash(password)
+    new_doctor = Doctor(username=username, hashed_password=hashed_pw)
+    db.add(new_doctor)
+    try:
+        await db.commit()
+    except:
+        return templates.TemplateResponse("register.html", {"request": request, "error": "Потребителското име вече съществува"})
+    return RedirectResponse(url="/auth/login", status_code=status.HTTP_303_SEE_OTHER)

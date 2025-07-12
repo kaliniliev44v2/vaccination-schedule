@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-5">
+  <h2 class="mb-4 text-center text-primary">Списък с пациенти</h2>
+  <div class="row">
+    {% for patient in patients %}
+    <div class="col-md-4 mb-4">
+      <div class="card shadow-sm h-100">
+        <div class="card-body">
+          <h5 class="card-title">{{ patient.first_name }} {{ patient.last_name }}</h5>
+          <p class="card-text">ЕГН: {{ patient.egn }}</p>
+          <p class="card-text">Дата на раждане: {{ patient.birth_date }}</p>
+          <div class="d-flex justify-content-between mt-3">
+            <a href="/patients/{{ patient.id }}/edit" class="btn btn-sm btn-warning">Редакция</a>
+            <a href="/patients/{{ patient.id }}/vaccines" class="btn btn-sm btn-primary">Ваксини</a>
+            <form method="post" action="/patients/{{ patient.id }}/delete" onsubmit="return confirm('Сигурни ли сте?');">
+              <button class="btn btn-sm btn-danger">Изтрий</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}
