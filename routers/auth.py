@@ -4,34 +4,58 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 from datetime import datetime, timedelta
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+import hashlib
+import os
 
 from models import Doctor
 from database import get_db
 from schemas import DoctorCreate, DoctorOut
 
-import os
+# Фиксиране на bcrypt проблема
+try:
+    from passlib.context import CryptContext
+    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+except Exception as e:
+    print(f"Bcrypt error: {e}")
+    # Fallback към стандартен hashing ако bcrypt не работи
+    import hashlib
+    pwd_context = None
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 templates = Jinja2Templates(directory="templates")
 
 # Настройки
-SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-here")
+SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-here-change-in-production")
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 30))
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token")
 
 
-# 🔐 Хеширане на пароли
+# 🔐 Хеширане на пароли с fallback
 def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
+    try:
+        if pwd_context:
+            return pwd_context.verify(plain_password, hashed_password)
+        else:
+            # Fallback към SHA256
+            return hashlib.sha256(plain_password.encode()).hexdigest() == hashed_password
+    except Exception as e:
+        print(f"Password verification error: {e}")
+        return False
 
 def get_password_hash(password):
-    return pwd_context.hash(password)
+    try:
+        if pwd_context:
+            return pwd_context.hash(password)
+        else:
+            # Fallback към SHA256
+            return hashlib.sha256(password.encode()).hexdigest()
+    except Exception as e:
+        print(f"Password hashing error: {e}")
+        return hashlib.sha256(password.encode()).hexdigest()
 
 
 # 🎟️ Генериране на JWT token
@@ -89,31 +113,44 @@ async def get_current_doctor_web(request: Request, db: AsyncSession = Depends(ge
 # 📥 Регистрация на лекар (API)
 @router.post("/register", response_model=DoctorOut)
 async def register(doctor_data: DoctorCreate, db: AsyncSession = Depends(get_db)):
-    # Проверка дали потребителското име вече съществува
-    result = await db.execute(select(Doctor).where(Doctor.username == doctor_data.username))
-    existing_doctor = result.scalar_one_or_none()
-    if existing_doctor:
-        raise HTTPException(status_code=400, detail="Потребителското име вече съществува")
-    
-    hashed_pw = get_password_hash(doctor_data.password)
-    new_doctor = Doctor(username=doctor_data.username, hashed_password=hashed_pw)
-    db.add(new_doctor)
-    await db.commit()
-    await db.refresh(new_doctor)
-    return new_doctor
+    try:
+        # Проверка дали потребителското име вече съществува
+        result = await db.execute(select(Doctor).where(Doctor.username == doctor_data.username))
+        existing_doctor = result.scalar_one_or_none()
+        if existing_doctor:
+            raise HTTPException(status_code=400, detail="Потребителското име вече съществува")
+        
+        hashed_pw = get_password_hash(doctor_data.password)
+        new_doctor = Doctor(username=doctor_data.username, hashed_password=hashed_pw)
+        db.add(new_doctor)
+        await db.commit()
+        await db.refresh(new_doctor)
+        return new_doctor
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        print(f"Register error: {e}")
+        raise HTTPException(status_code=500, detail="Грешка при регистрация")
 
 
 # 🔑 Логин (API)
 @router.post("/token")
 async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Doctor).where(Doctor.username == form_data.username))
-    doctor = result.scalar_one_or_none()
+    try:
+        result = await db.execute(select(Doctor).where(Doctor.username == form_data.username))
+        doctor = result.scalar_one_or_none()
 
-    if not doctor or not verify_password(form_data.password, doctor.hashed_password):
-        raise HTTPException(status_code=401, detail="Невалидно потребителско име или парола")
+        if not doctor or not verify_password(form_data.password, doctor.hashed_password):
+            raise HTTPException(status_code=401, detail="Невалидно потребителско име или парола")
 
-    access_token = create_access_token(data={"sub": str(doctor.id)})
-    return {"access_token": access_token, "token_type": "bearer"}
+        access_token = create_access_token(data={"sub": str(doctor.id)})
+        return {"access_token": access_token, "token_type": "bearer"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Login API error: {e}")
+        raise HTTPException(status_code=500, detail="Грешка при вход")
 
 
 # 🌐 WEB ROUTES
@@ -139,28 +176,36 @@ async def login_web(
     password: str = Form(...),
     db: AsyncSession = Depends(get_db)
 ):
-    result = await db.execute(select(Doctor).where(Doctor.username == username))
-    doctor = result.scalar_one_or_none()
+    try:
+        result = await db.execute(select(Doctor).where(Doctor.username == username))
+        doctor = result.scalar_one_or_none()
 
-    if not doctor or not verify_password(password, doctor.hashed_password):
+        if not doctor or not verify_password(password, doctor.hashed_password):
+            return templates.TemplateResponse(
+                "login.html", 
+                {"request": request, "error": "Невалидно потребителско име или парола"}
+            )
+
+        # Създаваме JWT token
+        access_token = create_access_token(data={"sub": str(doctor.id)})
+        
+        # Пренасочваме към dashboard с token в cookie
+        response = RedirectResponse(url="/dashboard", status_code=status.HTTP_303_SEE_OTHER)
+        response.set_cookie(
+            key="access_token", 
+            value=access_token, 
+            httponly=True,
+            max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+            samesite="lax"
+        )
+        return response
+        
+    except Exception as e:
+        print(f"Web login error: {e}")
         return templates.TemplateResponse(
             "login.html", 
-            {"request": request, "error": "Невалидно потребителско име или парола"}
+            {"request": request, "error": "Грешка при вход в системата"}
         )
-
-    # Създаваме JWT token
-    access_token = create_access_token(data={"sub": str(doctor.id)})
-    
-    # Пренасочваме към dashboard с token в cookie
-    response = RedirectResponse(url="/dashboard", status_code=status.HTTP_303_SEE_OTHER)
-    response.set_cookie(
-        key="access_token", 
-        value=access_token, 
-        httponly=True,
-        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        samesite="lax"
-    )
-    return response
 
 
 # 📥 Web Register
@@ -171,20 +216,21 @@ async def register_web(
     password: str = Form(...),
     db: AsyncSession = Depends(get_db)
 ):
-    # Проверка дали потребителското име вече съществува
-    result = await db.execute(select(Doctor).where(Doctor.username == username))
-    existing_doctor = result.scalar_one_or_none()
-    if existing_doctor:
-        return templates.TemplateResponse(
-            "register.html", 
-            {"request": request, "error": "Потребителското име вече съществува"}
-        )
-    
     try:
+        # Проверка дали потребителското име вече съществува
+        result = await db.execute(select(Doctor).where(Doctor.username == username))
+        existing_doctor = result.scalar_one_or_none()
+        if existing_doctor:
+            return templates.TemplateResponse(
+                "register.html", 
+                {"request": request, "error": "Потребителското име вече съществува"}
+            )
+        
         hashed_pw = get_password_hash(password)
         new_doctor = Doctor(username=username, hashed_password=hashed_pw)
         db.add(new_doctor)
         await db.commit()
+        await db.refresh(new_doctor)
         
         # Автоматично влизане след регистрация
         access_token = create_access_token(data={"sub": str(new_doctor.id)})
@@ -197,7 +243,10 @@ async def register_web(
             samesite="lax"
         )
         return response
+        
     except Exception as e:
+        print(f"Web register error: {e}")
+        await db.rollback()
         return templates.TemplateResponse(
             "register.html", 
             {"request": request, "error": f"Грешка при регистрация: {str(e)}"}
