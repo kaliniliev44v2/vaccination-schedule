@@ -10,9 +10,14 @@
         <h2 class="text-primary">
           <i class="bi bi-shield-check"></i> Ваксинации на {{ patient.first_name }} {{ patient.last_name }}
         </h2>
-        <a href="/patients/{{ patient.id }}/vaccines/add" class="btn btn-success">
-          <i class="bi bi-plus-circle"></i> Добави ваксина
-        </a>
+        <div class="btn-group">
+          <a href="/patients/{{ patient.id }}/vaccines/add" class="btn btn-success">
+            <i class="bi bi-plus-circle"></i> Добави с дата
+          </a>
+          <a href="/vaccines" class="btn btn-outline-secondary">
+            <i class="bi bi-gear"></i> Управление на ваксини
+          </a>
+        </div>
       </div>
     </div>
   </div>
@@ -44,16 +49,32 @@
         <div class="card-body">
           {% if given %}
             <div class="list-group list-group-flush">
-              {% for vaccine in given %}
-                <div class="list-group-item d-flex justify-content-between align-items-center">
-                  <div>
-                    <i class="bi bi-shield-fill-check text-success"></i>
-                    <strong>{{ vaccine.name }}</strong>
-                    {% if vaccine.is_mandatory %}
-                      <small class="badge bg-warning text-dark ms-2">Задължителна</small>
-                    {% endif %}
+              {% for item in given %}
+                <div class="list-group-item">
+                  <div class="d-flex justify-content-between align-items-start">
+                    <div class="flex-grow-1">
+                      <div class="d-flex align-items-center">
+                        <i class="bi bi-shield-fill-check text-success me-2"></i>
+                        <div>
+                          <h6 class="mb-1">{{ item.vaccine.name }}</h6>
+                          <small class="text-muted">
+                            <i class="bi bi-calendar3"></i> Поставена на: {{ item.immunization.date_given.strftime('%d.%m.%Y') }}
+                          </small>
+                          {% if item.vaccine.is_mandatory %}
+                            <br><small class="badge bg-warning text-dark">Задължителна</small>
+                          {% endif %}
+                        </div>
+                      </div>
+                    </div>
+                    <div class="btn-group-vertical btn-group-sm">
+                      <form method="post" action="/patients/{{ patient.id }}/vaccines/{{ item.vaccine.id }}/remove" 
+                            onsubmit="return confirm('Сигурни ли сте, че искате да премахнете {{ item.vaccine.name }}?');">
+                        <button type="submit" class="btn btn-outline-danger btn-sm" title="Премахни ваксината">
+                          <i class="bi bi-x-circle"></i>
+                        </button>
+                      </form>
+                    </div>
                   </div>
-                  <span class="badge bg-success rounded-pill">✓</span>
                 </div>
               {% endfor %}
             </div>
@@ -79,22 +100,44 @@
           {% if missing %}
             <div class="list-group list-group-flush">
               {% for vaccine in missing %}
-                <div class="list-group-item d-flex justify-content-between align-items-center">
-                  <div>
-                    <i class="bi bi-shield-exclamation text-warning"></i>
-                    <strong>{{ vaccine.name }}</strong>
-                    {% if vaccine.recommended_month %}
-                      <small class="text-muted">(препоръчва се в {{ vaccine.recommended_month }} месец)</small>
-                    {% endif %}
+                <div class="list-group-item">
+                  <div class="d-flex justify-content-between align-items-center">
+                    <div class="flex-grow-1">
+                      <div class="d-flex align-items-center">
+                        <i class="bi bi-shield-exclamation text-warning me-2"></i>
+                        <div>
+                          <h6 class="mb-1">{{ vaccine.name }}</h6>
+                          {% if vaccine.recommended_month %}
+                            <small class="text-muted">
+                              <i class="bi bi-clock"></i> Препоръчва се в {{ vaccine.recommended_month }} месец
+                            </small>
+                          {% endif %}
+                        </div>
+                      </div>
+                    </div>
+                    <div class="btn-group-vertical btn-group-sm">
+                      <form method="post" action="/patients/{{ patient.id }}/vaccines/{{ vaccine.id }}/mark-given" 
+                            style="margin-bottom: 2px;">
+                        <button type="submit" class="btn btn-success btn-sm" title="Маркирай като сложена (днес)">
+                          <i class="bi bi-check-lg"></i> Сложена
+                        </button>
+                      </form>
+                      <a href="/patients/{{ patient.id }}/vaccines/add?vaccine_id={{ vaccine.id }}" 
+                         class="btn btn-outline-primary btn-sm" title="Добави с конкретна дата">
+                        <i class="bi bi-calendar-plus"></i> С дата
+                      </a>
+                    </div>
                   </div>
-                  <span class="badge bg-warning rounded-pill">!</span>
                 </div>
               {% endfor %}
             </div>
             
             <div class="alert alert-warning mt-3">
               <i class="bi bi-info-circle"></i>
-              <small>Има <strong>{{ missing|length }}</strong> липсващи задължителни ваксини за тази възраст.</small>
+              <small>
+                Има <strong>{{ missing|length }}</strong> липсващи задължителни ваксини за тази възраст.
+                <br>Можете да ги маркирате като сложени с днешна дата или да добавите с конкретна дата.
+              </small>
             </div>
           {% else %}
             <div class="text-center text-success py-4">
@@ -108,10 +151,22 @@
     </div>
   </div>
 
-  <div class="mt-4 text-center">
-    <a href="/dashboard" class="btn btn-secondary">
-      <i class="bi bi-arrow-left"></i> Назад към пациентите
-    </a>
-  </div>
-</div>
-{% endblock %}
+  <!-- Кратко обяснение на действията -->
+  <div class="row mt-4">
+    <div class="col-12">
+      <div class="card bg-light">
+        <div class="card-body">
+          <h6 class="card-title"><i class="bi bi-info-circle text-info"></i> Как да използвате системата:</h6>
+          <div class="row">
+            <div class="col-md-6">
+              <ul class="list-unstyled">
+                <li><i class="bi bi-check-lg text-success"></i> <strong>Сложена:</strong> Маркира ваксината като поставена днес</li>
+                <li><i class="bi bi-calendar-plus text-primary"></i> <strong>С дата:</strong> Добавя ваксина с конкретна дата</li>
+              </ul>
+            </div>
+            <div class="col-md-6">
+              <ul class="list-unstyled">
+                <li><i class="bi bi-plus-circle text-success"></i> <strong>Добави с дата:</strong> Добавя нова ваксина с избор на дата</li>
+                <li><i class="bi bi-gear text-secondary"></i> <strong>
+
+                    

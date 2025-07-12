@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="bg">
+<html lang="bg" class="h-100">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -19,34 +19,54 @@
       body {
         background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
         min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+      
+      /* Фиксиране на footer */
+      .content-wrapper {
+        flex: 1 0 auto;
+      }
+      
+      footer {
+        flex-shrink: 0;
+        margin-top: auto;
+      }
+      
+      /* Подобряване на визуализацията */
+      .main-content {
+        min-height: calc(100vh - 120px);
+        padding-bottom: 2rem;
       }
     </style>
   </head>
-  <body>
-    {% if doctor %}
-    <nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm">
-      <div class="container">
-        <a class="navbar-brand" href="/dashboard">
-          <i class="bi bi-hospital"></i> Ваксинационен график
-        </a>
-        
-        <div class="navbar-nav ms-auto">
-          <div class="navbar-text text-light me-3">
-            <i class="bi bi-person-circle"></i> Добре дошли, <strong>{{ doctor.username }}</strong>
-          </div>
-          <a href="/auth/logout" class="btn btn-outline-light btn-sm">
-            <i class="bi bi-box-arrow-right"></i> Изход
+  <body class="d-flex flex-column h-100">
+    <div class="content-wrapper">
+      {% if doctor %}
+      <nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm">
+        <div class="container">
+          <a class="navbar-brand" href="/dashboard">
+            <i class="bi bi-hospital"></i> Ваксинационен график
           </a>
+          
+          <div class="navbar-nav ms-auto">
+            <div class="navbar-text text-light me-3">
+              <i class="bi bi-person-circle"></i> Добре дошли, <strong>{{ doctor.username }}</strong>
+            </div>
+            <a href="/auth/logout" class="btn btn-outline-light btn-sm">
+              <i class="bi bi-box-arrow-right"></i> Изход
+            </a>
+          </div>
         </div>
-      </div>
-    </nav>
-    {% endif %}
+      </nav>
+      {% endif %}
 
-    <main class="container mt-4">
-      {% block content %}{% endblock %}
-    </main>
+      <main class="container mt-4 main-content">
+        {% block content %}{% endblock %}
+      </main>
+    </div>
 
-    <footer class="mt-5 py-4 bg-light text-center text-muted">
+    <footer class="py-3 bg-light text-center text-muted border-top">
       <div class="container">
         <small>&copy; 2025 Ваксинационен график. Всички права запазени.</small>
       </div>

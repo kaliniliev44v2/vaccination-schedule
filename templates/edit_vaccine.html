@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+
+{% block title %}Редактиране на ваксина{% endblock %}
+
+{% block content %}
+<div class="container">
+  <div class="row justify-content-center">
+    <div class="col-md-8 col-lg-6">
+      <div class="card shadow">
+        <div class="card-header bg-primary text-white">
+          <h4 class="mb-0">
+            <i class="bi bi-pencil"></i>
+            Редактиране на ваксина
+          </h4>
+        </div>
+        
+        <div class="card-body">
+          {% if error %}
+            <div class="alert alert-danger" role="alert">
+              <i class="bi bi-exclamation-triangle"></i> {{ error }}
+            </div>
+          {% endif %}
+
+          <form method="post" action="/vaccines/{{ vaccine.id }}/update">
+            <div class="mb-3">
+              <label for="name" class="form-label">
+                <i class="bi bi-shield"></i> Име на ваксината <span class="text-danger">*</span>
+              </label>
+              <input type="text" class="form-control" name="name" id="name" 
+                     required value="{{ vaccine.name }}" 
+                     placeholder="Въведете име на ваксината">
+            </div>
+
+            <div class="mb-3">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="is_mandatory" id="is_mandatory" 
+                       value="true" {% if vaccine.is_mandatory %}checked{% endif %}>
+                <label class="form-check-label" for="is_mandatory">
+                  <i class="bi bi-exclamation-triangle text-warning"></i>
+                  Задължителна ваксина
+                </label>
+              </div>
+              <div class="form-text">Отбележете ако ваксината е задължителна според националния календар</div>
+            </div>
+
+            <div class="mb-4">
+              <label for="recommended_month" class="form-label">
+                <i class="bi bi-clock"></i> Препоръчан месец за поставяне
+              </label>
+              <input type="number" class="form-control" name="recommended_month" id="recommended_month" 
+                     value="{{ vaccine.recommended_month if vaccine.recommended_month else '' }}"
+                     min="0" max="216" placeholder="Въведете месец (например: 2, 4, 13...)">
+              <div class="form-text">
+                <strong>Примери:</strong> 
+                <span class="badge bg-light text-dark">2</span> за 2 месеца, 
+                <span class="badge bg-light text-dark">4</span> за 4 месеца, 
+                <span class="badge bg-light text-dark">13</span> за 13 месеца и т.н.
+                <br>Оставете празно ако няма конкретна препоръка.
+              </div>
+            </div>
+
+            <!-- Полезна информация -->
+            <div class="alert alert-info">
+              <h6><i class="bi bi-lightbulb"></i> Съвети за редактиране:</h6>
+              <ul class="mb-0">
+                <li><strong>Стандартен график:</strong> 2, 4, 6 месеца за основните ваксини</li>
+                <li><strong>Годишни ваксини:</strong> 12, 24 месеца</li>
+                <li><strong>Училищни ваксини:</strong> 72 месеца (6 години)</li>
+                <li><strong>Индивидуален график:</strong> Можете да променяте според нуждите на пациента</li>
+              </ul>
+            </div>
+
+            <div class="d-flex gap-2">
+              <button type="submit" class="btn btn-primary flex-fill">
+                <i class="bi bi-check-lg"></i> Запази промените
+              </button>
+              <a href="/vaccines" class="btn btn-secondary">
+                <i class="bi bi-x-lg"></i> Отказ
+              </a>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Валидация на месечния период
+  document.getElementById('recommended_month').addEventListener('input', function(e) {
+    const value = parseInt(e.target.value);
+    if (value && (value < 0 || value > 216)) {
+      e.target.setCustomValidity('Месецът трябва да бъде между 0 и 216 (18 години)');
+    } else {
+      e.target.setCustomValidity('');
+    }
+  });
+</script>
+{% endblock %}
