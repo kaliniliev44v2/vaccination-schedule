@@ -8,22 +8,38 @@ from typing import List, Optional
 
 from database import get_db
 from models import Patient, Doctor, Vaccine, Immunization
-from routers.auth import get_current_doctor_web
+from routers.auth import get_current_doctor_web_strict  # Използваме strict версията
 from utils.schedule import calculate_age_in_months, required_mandatory_vaccines
 
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
 
 
+# Middleware функция за проверка на автентификация и redirect
+async def check_auth_redirect(request: Request, db: AsyncSession = Depends(get_db)):
+    """Проверява автентификацията и прави redirect към login ако е необходимо"""
+    try:
+        from routers.auth import get_current_doctor_web_strict
+        doctor = await get_current_doctor_web_strict(request, db)
+        return doctor
+    except HTTPException:
+        # Ако няма автентификация, redirect към login
+        return RedirectResponse(url="/auth/login", status_code=status.HTTP_303_SEE_OTHER)
+
+
 # 🏠 Dashboard - показва всички пациенти на лекаря
 @router.get("/dashboard", response_class=HTMLResponse)
 async def dashboard(
     request: Request, 
-    db: AsyncSession = Depends(get_db),
-    current_doctor: Doctor = Depends(get_current_doctor_web)
+    db: AsyncSession = Depends(get_db)
 ):
     try:
-        result = await db.execute(select(Patient).where(Patient.doctor_id == current_doctor.id))
+        # Проверка на автентификацията
+        doctor = await check_auth_redirect(request, db)
+        if isinstance(doctor, RedirectResponse):
+            return doctor
+            
+        result = await db.execute(select(Patient).where(Patient.doctor_id == doctor.id))
         patients = result.scalars().all()
         
         return templates.TemplateResponse(
@@ -31,7 +47,7 @@ async def dashboard(
             {
                 "request": request, 
                 "patients": patients,
-                "doctor": current_doctor
+                "doctor": doctor
             }
         )
     except Exception as e:
@@ -41,7 +57,7 @@ async def dashboard(
             {
                 "request": request, 
                 "patients": [],
-                "doctor": current_doctor,
+                "doctor": None,
                 "error": "Грешка при зареждане на пациентите"
             }
         )
@@ -51,10 +67,13 @@ async def dashboard(
 @router.get("/vaccines", response_class=HTMLResponse)
 async def manage_vaccines(
     request: Request,
-    db: AsyncSession = Depends(get_db),
-    current_doctor: Doctor = Depends(get_current_doctor_web)
+    db: AsyncSession = Depends(get_db)
 ):
     try:
+        doctor = await check_auth_redirect(request, db)
+        if isinstance(doctor, RedirectResponse):
+            return doctor
+            
         result = await db.execute(select(Vaccine).order_by(Vaccine.recommended_month))
         vaccines = result.scalars().all()
         
@@ -63,20 +82,12 @@ async def manage_vaccines(
             {
                 "request": request,
                 "vaccines": vaccines,
-                "doctor": current_doctor
+                "doctor": doctor
             }
         )
     except Exception as e:
         print(f"Vaccines management error: {e}")
-        return templates.TemplateResponse(
-            "manage_vaccines.html",
-            {
-                "request": request,
-                "vaccines": [],
-                "doctor": current_doctor,
-                "error": "Грешка при зареждане на ваксините"
-            }
-        )
+        return RedirectResponse(url="/auth/login", status_code=status.HTTP_303_SEE_OTHER)
 
 
 # 📝 Редактиране на ваксина
@@ -84,10 +95,13 @@ async def manage_vaccines(
 async def edit_vaccine_form(
     vaccine_id: int,
     request: Request,
-    db: AsyncSession = Depends(get_db),
-    current_doctor: Doctor = Depends(get_current_doctor_web)
+    db: AsyncSession = Depends(get_db)
 ):
     try:
+        doctor = await check_auth_redirect(request, db)
+        if isinstance(doctor, RedirectResponse):
+            return doctor
+            
         result = await db.execute(select(Vaccine).where(Vaccine.id == vaccine_id))
         vaccine = result.scalar_one_or_none()
         
@@ -99,14 +113,14 @@ async def edit_vaccine_form(
             {
                 "request": request,
                 "vaccine": vaccine,
-                "doctor": current_doctor
+                "doctor": doctor
             }
         )
     except HTTPException:
         raise
     except Exception as e:
         print(f"Edit vaccine form error: {e}")
-        raise HTTPException(status_code=500, detail="Грешка при зареждане на формата")
+        return RedirectResponse(url="/auth/login", status_code=status.HTTP_303_SEE_OTHER)
 
 
 # 🔄 Актуализиране на ваксина
@@ -117,10 +131,13 @@ async def update_vaccine_web(
     name: str = Form(...),
     is_mandatory: bool = Form(False),
     recommended_month: Optional[int] = Form(None),
-    db: AsyncSession = Depends(get_db),
-    current_doctor: Doctor = Depends(get_current_doctor_web)
+    db: AsyncSession = Depends(get_db)
 ):
     try:
+        doctor = await check_auth_redirect(request, db)
+        if isinstance(doctor, RedirectResponse):
+            return doctor
+            
         result = await db.execute(select(Vaccine).where(Vaccine.id == vaccine_id))
         vaccine = result.scalar_one_or_none()
         
@@ -137,37 +154,32 @@ async def update_vaccine_web(
     except Exception as e:
         print(f"Update vaccine error: {e}")
         await db.rollback()
-        
-        # Възстановяваме ваксината за показване на грешката
-        result = await db.execute(select(Vaccine).where(Vaccine.id == vaccine_id))
-        vaccine = result.scalar_one_or_none()
-        
-        return templates.TemplateResponse(
-            "edit_vaccine.html",
-            {
-                "request": request,
-                "vaccine": vaccine,
-                "doctor": current_doctor,
-                "error": f"Грешка при актуализиране: {str(e)}"
-            }
-        )
+        return RedirectResponse(url="/vaccines", status_code=status.HTTP_303_SEE_OTHER)
 
 
 # ➕ Форма за добавяне на нов пациент
 @router.get("/patients/new", response_class=HTMLResponse)
 async def new_patient_form(
     request: Request,
-    current_doctor: Doctor = Depends(get_current_doctor_web)
+    db: AsyncSession = Depends(get_db)
 ):
-    return templates.TemplateResponse(
-        "form.html", 
-        {
-            "request": request, 
-            "patient": None, 
-            "action_url": "/patients/create",
-            "doctor": current_doctor
-        }
-    )
+    try:
+        doctor = await check_auth_redirect(request, db)
+        if isinstance(doctor, RedirectResponse):
+            return doctor
+            
+        return templates.TemplateResponse(
+            "form.html", 
+            {
+                "request": request, 
+                "patient": None, 
+                "action_url": "/patients/create",
+                "doctor": doctor
+            }
+        )
+    except Exception as e:
+        print(f"New patient form error: {e}")
+        return RedirectResponse(url="/auth/login", status_code=status.HTTP_303_SEE_OTHER)
 
 
 # 📥 Създаване на нов пациент
@@ -178,10 +190,13 @@ async def create_patient_web(
     last_name: str = Form(...),
     egn: str = Form(...),
     birth_date: date = Form(...),
-    db: AsyncSession = Depends(get_db),
-    current_doctor: Doctor = Depends(get_current_doctor_web)
+    db: AsyncSession = Depends(get_db)
 ):
     try:
+        doctor = await check_auth_redirect(request, db)
+        if isinstance(doctor, RedirectResponse):
+            return doctor
+            
         # Проверка дали ЕГН вече съществува
         result = await db.execute(select(Patient).where(Patient.egn == egn))
         existing_patient = result.scalar_one_or_none()
@@ -193,7 +208,7 @@ async def create_patient_web(
                     "patient": None,
                     "action_url": "/patients/create",
                     "error": "Пациент с това ЕГН вече съществува",
-                    "doctor": current_doctor
+                    "doctor": doctor
                 }
             )
         
@@ -202,28 +217,18 @@ async def create_patient_web(
             last_name=last_name,
             egn=egn,
             birth_date=birth_date,
-            doctor_id=current_doctor.id
+            doctor_id=doctor.id
         )
         db.add(new_patient)
         await db.commit()
-        await db.refresh(new_patient)  # Освежаване на обекта
+        await db.refresh(new_patient)
         
         return RedirectResponse(url="/dashboard", status_code=status.HTTP_303_SEE_OTHER)
         
     except Exception as e:
         print(f"Create patient error: {e}")
         await db.rollback()
-        
-        return templates.TemplateResponse(
-            "form.html",
-            {
-                "request": request,
-                "patient": None,
-                "action_url": "/patients/create",
-                "error": f"Грешка при създаване на пациент: {str(e)}",
-                "doctor": current_doctor
-            }
-        )
+        return RedirectResponse(url="/dashboard", status_code=status.HTTP_303_SEE_OTHER)
 
 
 # 📝 Форма за редактиране на пациент
@@ -231,14 +236,17 @@ async def create_patient_web(
 async def edit_patient_form(
     patient_id: int,
     request: Request,
-    db: AsyncSession = Depends(get_db),
-    current_doctor: Doctor = Depends(get_current_doctor_web)
+    db: AsyncSession = Depends(get_db)
 ):
     try:
+        doctor = await check_auth_redirect(request, db)
+        if isinstance(doctor, RedirectResponse):
+            return doctor
+            
         result = await db.execute(
             select(Patient).where(
                 Patient.id == patient_id, 
-                Patient.doctor_id == current_doctor.id
+                Patient.doctor_id == doctor.id
             )
         )
         patient = result.scalar_one_or_none()
@@ -252,14 +260,14 @@ async def edit_patient_form(
                 "request": request,
                 "patient": patient,
                 "action_url": f"/patients/{patient_id}/update",
-                "doctor": current_doctor
+                "doctor": doctor
             }
         )
     except HTTPException:
         raise
     except Exception as e:
         print(f"Edit patient form error: {e}")
-        raise HTTPException(status_code=500, detail="Грешка при зареждане на формата")
+        return RedirectResponse(url="/dashboard", status_code=status.HTTP_303_SEE_OTHER)
 
 
 # 🔄 Актуализиране на пациент
@@ -271,14 +279,17 @@ async def update_patient_web(
     last_name: str = Form(...),
     egn: str = Form(...),
     birth_date: date = Form(...),
-    db: AsyncSession = Depends(get_db),
-    current_doctor: Doctor = Depends(get_current_doctor_web)
+    db: AsyncSession = Depends(get_db)
 ):
     try:
+        doctor = await check_auth_redirect(request, db)
+        if isinstance(doctor, RedirectResponse):
+            return doctor
+            
         result = await db.execute(
             select(Patient).where(
                 Patient.id == patient_id, 
-                Patient.doctor_id == current_doctor.id
+                Patient.doctor_id == doctor.id
             )
         )
         patient = result.scalar_one_or_none()
@@ -299,7 +310,7 @@ async def update_patient_web(
                     "patient": patient,
                     "action_url": f"/patients/{patient_id}/update",
                     "error": "Пациент с това ЕГН вече съществува",
-                    "doctor": current_doctor
+                    "doctor": doctor
                 }
             )
         
@@ -316,31 +327,25 @@ async def update_patient_web(
     except Exception as e:
         print(f"Update patient error: {e}")
         await db.rollback()
-        
-        return templates.TemplateResponse(
-            "form.html",
-            {
-                "request": request,
-                "patient": patient,
-                "action_url": f"/patients/{patient_id}/update",
-                "error": f"Грешка при актуализиране: {str(e)}",
-                "doctor": current_doctor
-            }
-        )
+        return RedirectResponse(url="/dashboard", status_code=status.HTTP_303_SEE_OTHER)
 
 
 # ❌ Изтриване на пациент
 @router.post("/patients/{patient_id}/delete")
 async def delete_patient_web(
     patient_id: int,
-    db: AsyncSession = Depends(get_db),
-    current_doctor: Doctor = Depends(get_current_doctor_web)
+    request: Request,
+    db: AsyncSession = Depends(get_db)
 ):
     try:
+        doctor = await check_auth_redirect(request, db)
+        if isinstance(doctor, RedirectResponse):
+            return doctor
+            
         result = await db.execute(
             select(Patient).where(
                 Patient.id == patient_id, 
-                Patient.doctor_id == current_doctor.id
+                Patient.doctor_id == doctor.id
             )
         )
         patient = result.scalar_one_or_none()
@@ -366,7 +371,7 @@ async def delete_patient_web(
     except Exception as e:
         print(f"Delete patient error: {e}")
         await db.rollback()
-        raise HTTPException(status_code=500, detail="Грешка при изтриване на пациента")
+        return RedirectResponse(url="/dashboard", status_code=status.HTTP_303_SEE_OTHER)
 
 
 # 💉 Страница с ваксини на пациент
@@ -374,15 +379,18 @@ async def delete_patient_web(
 async def patient_vaccines(
     patient_id: int,
     request: Request,
-    db: AsyncSession = Depends(get_db),
-    current_doctor: Doctor = Depends(get_current_doctor_web)
+    db: AsyncSession = Depends(get_db)
 ):
     try:
+        doctor = await check_auth_redirect(request, db)
+        if isinstance(doctor, RedirectResponse):
+            return doctor
+            
         # Вземаме пациента
         result = await db.execute(
             select(Patient).where(
                 Patient.id == patient_id, 
-                Patient.doctor_id == current_doctor.id
+                Patient.doctor_id == doctor.id
             )
         )
         patient = result.scalar_one_or_none()
@@ -429,7 +437,7 @@ async def patient_vaccines(
                 "patient": patient,
                 "given": given_vaccines,
                 "missing": missing_vaccines,
-                "doctor": current_doctor,
+                "doctor": doctor,
                 "age_months": age_months
             }
         )
@@ -437,242 +445,4 @@ async def patient_vaccines(
         raise
     except Exception as e:
         print(f"Patient vaccines error: {e}")
-        raise HTTPException(status_code=500, detail="Грешка при зареждане на ваксините")
-
-
-# 💉 Бърз запис на ваксина (маркиране като сложена)
-@router.post("/patients/{patient_id}/vaccines/{vaccine_id}/mark-given")
-async def mark_vaccine_as_given(
-    patient_id: int,
-    vaccine_id: int,
-    db: AsyncSession = Depends(get_db),
-    current_doctor: Doctor = Depends(get_current_doctor_web)
-):
-    try:
-        # Проверка на достъп до пациента
-        result = await db.execute(
-            select(Patient).where(
-                Patient.id == patient_id, 
-                Patient.doctor_id == current_doctor.id
-            )
-        )
-        patient = result.scalar_one_or_none()
-        
-        if not patient:
-            raise HTTPException(status_code=404, detail="Пациентът не е намерен или нямате достъп до него")
-        
-        # Проверка дали ваксината вече е поставена
-        result = await db.execute(
-            select(Immunization).where(
-                Immunization.patient_id == patient_id,
-                Immunization.vaccine_id == vaccine_id
-            )
-        )
-        existing = result.scalar_one_or_none()
-        if existing:
-            # Ако вече е поставена, просто се връщаме
-            return RedirectResponse(
-                url=f"/patients/{patient_id}/vaccines", 
-                status_code=status.HTTP_303_SEE_OTHER
-            )
-        
-        # Добавяне на новата имунизация с днешна дата
-        new_immunization = Immunization(
-            patient_id=patient_id,
-            vaccine_id=vaccine_id,
-            date_given=date.today(),
-            doctor_id=current_doctor.id
-        )
-        db.add(new_immunization)
-        await db.commit()
-        
-        return RedirectResponse(
-            url=f"/patients/{patient_id}/vaccines", 
-            status_code=status.HTTP_303_SEE_OTHER
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"Mark vaccine as given error: {e}")
-        await db.rollback()
-        raise HTTPException(status_code=500, detail="Грешка при записване на ваксината")
-
-
-# 💉 Форма за добавяне на ваксина с дата
-@router.get("/patients/{patient_id}/vaccines/add", response_class=HTMLResponse)
-async def add_vaccine_form(
-    patient_id: int,
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-    current_doctor: Doctor = Depends(get_current_doctor_web)
-):
-    try:
-        # Проверка на достъп до пациента
-        result = await db.execute(
-            select(Patient).where(
-                Patient.id == patient_id, 
-                Patient.doctor_id == current_doctor.id
-            )
-        )
-        patient = result.scalar_one_or_none()
-        
-        if not patient:
-            raise HTTPException(status_code=404, detail="Пациентът не е намерен или нямате достъп до него")
-        
-        # Всички налични ваксини
-        result = await db.execute(select(Vaccine))
-        all_vaccines = result.scalars().all()
-        
-        # Вече поставени ваксини
-        result = await db.execute(
-            select(Immunization).where(Immunization.patient_id == patient_id)
-        )
-        given_vaccine_ids = {imm.vaccine_id for imm in result.scalars().all()}
-        
-        # Ваксини, които могат да се добавят
-        available_vaccines = [v for v in all_vaccines if v.id not in given_vaccine_ids]
-        
-        return templates.TemplateResponse(
-            "add_vaccine.html",
-            {
-                "request": request,
-                "patient": patient,
-                "vaccines": available_vaccines,
-                "doctor": current_doctor
-            }
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"Add vaccine form error: {e}")
-        raise HTTPException(status_code=500, detail="Грешка при зареждане на формата")
-
-
-# 💉 Добавяне на ваксина към пациент
-@router.post("/patients/{patient_id}/vaccines/add")
-async def add_vaccine_to_patient(
-    patient_id: int,
-    request: Request,
-    vaccine_id: int = Form(...),
-    date_given: date = Form(...),
-    db: AsyncSession = Depends(get_db),
-    current_doctor: Doctor = Depends(get_current_doctor_web)
-):
-    try:
-        # Проверка на достъп до пациента
-        result = await db.execute(
-            select(Patient).where(
-                Patient.id == patient_id, 
-                Patient.doctor_id == current_doctor.id
-            )
-        )
-        patient = result.scalar_one_or_none()
-        
-        if not patient:
-            raise HTTPException(status_code=404, detail="Пациентът не е намерен или нямате достъп до него")
-        
-        # Проверка дали ваксината вече е поставена
-        result = await db.execute(
-            select(Immunization).where(
-                Immunization.patient_id == patient_id,
-                Immunization.vaccine_id == vaccine_id
-            )
-        )
-        existing = result.scalar_one_or_none()
-        if existing:
-            raise ValueError("Тази ваксина вече е поставена на пациента")
-        
-        # Добавяне на новата имунизация
-        new_immunization = Immunization(
-            patient_id=patient_id,
-            vaccine_id=vaccine_id,
-            date_given=date_given,
-            doctor_id=current_doctor.id
-        )
-        db.add(new_immunization)
-        await db.commit()
-        
-        return RedirectResponse(
-            url=f"/patients/{patient_id}/vaccines", 
-            status_code=status.HTTP_303_SEE_OTHER
-        )
-        
-    except ValueError as ve:
-        await db.rollback()
-        error_message = str(ve)
-    except Exception as e:
-        await db.rollback()
-        print(f"Add vaccine to patient error: {e}")
-        error_message = f"Грешка при добавяне на ваксината: {str(e)}"
-    
-    # При грешка, връщаме формата с грешка
-    try:
-        result = await db.execute(select(Vaccine))
-        all_vaccines = result.scalars().all()
-        
-        result = await db.execute(
-            select(Immunization).where(Immunization.patient_id == patient_id)
-        )
-        given_vaccine_ids = {imm.vaccine_id for imm in result.scalars().all()}
-        available_vaccines = [v for v in all_vaccines if v.id not in given_vaccine_ids]
-        
-        return templates.TemplateResponse(
-            "add_vaccine.html",
-            {
-                "request": request,
-                "patient": patient,
-                "vaccines": available_vaccines,
-                "doctor": current_doctor,
-                "error": error_message
-            }
-        )
-    except Exception as e:
-        print(f"Error showing add vaccine form with error: {e}")
-        raise HTTPException(status_code=500, detail="Грешка при зареждане на формата")
-
-
-# ❌ Премахване на ваксина (отбелязване като не сложена)
-@router.post("/patients/{patient_id}/vaccines/{vaccine_id}/remove")
-async def remove_vaccine_from_patient(
-    patient_id: int,
-    vaccine_id: int,
-    db: AsyncSession = Depends(get_db),
-    current_doctor: Doctor = Depends(get_current_doctor_web)
-):
-    try:
-        # Проверка на достъп до пациента
-        result = await db.execute(
-            select(Patient).where(
-                Patient.id == patient_id, 
-                Patient.doctor_id == current_doctor.id
-            )
-        )
-        patient = result.scalar_one_or_none()
-        
-        if not patient:
-            raise HTTPException(status_code=404, detail="Пациентът не е намерен или нямате достъп до него")
-        
-        # Намираме имунизацията за изтриване
-        result = await db.execute(
-            select(Immunization).where(
-                Immunization.patient_id == patient_id,
-                Immunization.vaccine_id == vaccine_id
-            )
-        )
-        immunization = result.scalar_one_or_none()
-        
-        if immunization:
-            await db.delete(immunization)
-            await db.commit()
-        
-        return RedirectResponse(
-            url=f"/patients/{patient_id}/vaccines", 
-            status_code=status.HTTP_303_SEE_OTHER
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f"Remove vaccine error: {e}")
-        await db.rollback()
-        raise HTTPException(status_code=500, detail="Грешка при премахване на ваксината")
+        return RedirectResponse(url="/dashboard", status_code=status.HTTP_303_SEE_OTHER)

@@ -88,25 +88,81 @@ async def get_current_doctor(token: str = Depends(oauth2_scheme), db: AsyncSessi
     return doctor
 
 
-# 👤 Dependency: вземи текущия логнат лекар (за Web)
+# 👤 Dependency: вземи текущия логнат лекар (за Web) - ПОПРАВЕН
 async def get_current_doctor_web(request: Request, db: AsyncSession = Depends(get_db)) -> Doctor:
     """Web версия на get_current_doctor - проверява за token в cookie"""
+    try:
+        token = request.cookies.get("access_token")
+        print(f"Cookie token found: {token is not None}")  # Debug
+        
+        if not token:
+            print("No access_token cookie found")  # Debug
+            return RedirectResponse(url="/auth/login", status_code=status.HTTP_303_SEE_OTHER)
+        
+        try:
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            doctor_id: int = payload.get("sub")
+            print(f"Doctor ID from token: {doctor_id}")  # Debug
+            
+            if doctor_id is None:
+                print("No doctor_id in token")  # Debug
+                return RedirectResponse(url="/auth/login", status_code=status.HTTP_303_SEE_OTHER)
+                
+        except JWTError as e:
+            print(f"JWT decode error: {e}")  # Debug
+            return RedirectResponse(url="/auth/login", status_code=status.HTTP_303_SEE_OTHER)
+
+        result = await db.execute(select(Doctor).where(Doctor.id == int(doctor_id)))
+        doctor = result.scalar_one_or_none()
+        
+        if doctor is None:
+            print(f"Doctor not found for ID: {doctor_id}")  # Debug
+            return RedirectResponse(url="/auth/login", status_code=status.HTTP_303_SEE_OTHER)
+            
+        print(f"Doctor found: {doctor.username}")  # Debug
+        return doctor
+        
+    except Exception as e:
+        print(f"General auth error: {e}")  # Debug
+        return RedirectResponse(url="/auth/login", status_code=status.HTTP_303_SEE_OTHER)
+
+
+# Алтернативен web dependency, който хвърля HTTPException вместо да прави redirect
+async def get_current_doctor_web_strict(request: Request, db: AsyncSession = Depends(get_db)) -> Doctor:
+    """Web версия на get_current_doctor - хвърля 401 ако няма автентификация"""
     token = request.cookies.get("access_token")
+    
     if not token:
-        raise HTTPException(status_code=status.HTTP_302_FOUND, headers={"Location": "/auth/login"})
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated - no access token found",
+            headers={"WWW-Authenticate": "Bearer"}
+        )
     
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         doctor_id: int = payload.get("sub")
         if doctor_id is None:
-            raise HTTPException(status_code=status.HTTP_302_FOUND, headers={"Location": "/auth/login"})
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token - no doctor ID",
+                headers={"WWW-Authenticate": "Bearer"}
+            )
     except JWTError:
-        raise HTTPException(status_code=status.HTTP_302_FOUND, headers={"Location": "/auth/login"})
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token - JWT error",
+            headers={"WWW-Authenticate": "Bearer"}
+        )
 
     result = await db.execute(select(Doctor).where(Doctor.id == int(doctor_id)))
     doctor = result.scalar_one_or_none()
     if doctor is None:
-        raise HTTPException(status_code=status.HTTP_302_FOUND, headers={"Location": "/auth/login"})
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Doctor not found",
+            headers={"WWW-Authenticate": "Bearer"}
+        )
     return doctor
 
 
@@ -188,6 +244,7 @@ async def login_web(
 
         # Създаваме JWT token
         access_token = create_access_token(data={"sub": str(doctor.id)})
+        print(f"Creating token for doctor {doctor.id}: {access_token[:20]}...")  # Debug
         
         # Пренасочваме към dashboard с token в cookie
         response = RedirectResponse(url="/dashboard", status_code=status.HTTP_303_SEE_OTHER)
@@ -196,8 +253,10 @@ async def login_web(
             value=access_token, 
             httponly=True,
             max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-            samesite="lax"
+            samesite="lax",
+            secure=False  # За development; в production задайте True
         )
+        print(f"Setting cookie for doctor {doctor.username}")  # Debug
         return response
         
     except Exception as e:
@@ -240,7 +299,8 @@ async def register_web(
             value=access_token, 
             httponly=True,
             max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-            samesite="lax"
+            samesite="lax",
+            secure=False  # За development; в production задайте True
         )
         return response
         

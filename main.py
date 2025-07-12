@@ -13,16 +13,18 @@ app = FastAPI(
     description="API за управление на ваксинационни графици"
 )
 
-# Включване на API роутери
+# ВАЖНО: Първо включваме auth роутера
 app.include_router(auth.router)
+
+# След това включваме Web CRUD роутери (които зависят от auth)
+app.include_router(crud.router)
+
+# Накрая включваме API роутерите
 app.include_router(patient.router) 
 app.include_router(doctor.router)
 app.include_router(vaccine.router)
 app.include_router(immunization.router)
 app.include_router(schedule.router)
-
-# Включване на Web CRUD роутери
-app.include_router(crud.router)
 
 # Статични файлове (ако имате CSS, JS, изображения)
 if os.path.exists("static"):
